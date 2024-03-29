@@ -1,7 +1,7 @@
 # Bitwarden Item Cleaner
 
 ## Why?
-There might be some cases when you want to login on site by clicking link from Bitwarden and accidentally 
+There might be some cases when you want to login on site by clicking link from Bitwarden and accidentally visit old password recovery expired link, so you need get back to the site, click on log in and fill your credentials
 ## Features
 
 - ### URI Cleaner
