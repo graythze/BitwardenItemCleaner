@@ -13,21 +13,21 @@ There might be some cases when you want to log in on site by clicking link from 
 
     ``` python bwc.py bitwarden_export.json -domain ```
 
-    ![](\src\pic\domain.jpg)
+    ![](https://github.com/graythze/BitwardenItemCleaner/blob/main/src/pic/domain.jpg)
 
     #### 2. Subdomain converter
     To convert URIs including subdomain, use **-subdomain** flag
   
     ``` python bwc.py bitwarden_export.json -subdomain ```
 
-    ![](\src\pic\subdomain.jpg)
+    ![](https://github.com/graythze/BitwardenItemCleaner/blob/main/src/pic/subdomain.jpg)
 
 - ### Password history cleaner
     If you need to delete old previously used passwords (aka "Password History"), you can use this script with **-removeusedpw** flag. After that, all entries including old passwords will be removed.
 
     ``` python bwc.py bitwarden_export.json -removeusedpw ```
 
-    ![](\src\pic\removeusedpw.jpg)
+    ![](https://github.com/graythze/BitwardenItemCleaner/blob/main/src/pic/removeusedpw.jpg)
 
 - ### Use cleaner and converter together
     If you want to clean old used passwords and convert URIs, you can set flags together
