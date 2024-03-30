@@ -10,15 +10,29 @@ There might be some cases when you want to log in on site by clicking link from 
 
     #### 1. Domain converter
     To convert URIs to domain only, use **-domain** flag
-    > bwc.py bitwarden_export.json **-domain**
+
+    ``` python bwc.py bitwarden_export.json -domain ```
+
+    ![](\src\pic\domain.jpg)
 
     #### 2. Subdomain converter
     To convert URIs including subdomain, use **-subdomain** flag
-    > bwc.py bitwarden_export.json **-subdomain**
+  
+    ``` python bwc.py bitwarden_export.json -subdomain ```
+
+    ![](\src\pic\subdomain.jpg)
 
 - ### Password history cleaner
     If you need to delete old previously used passwords (aka "Password History"), you can use this script with **-removeusedpw** flag. After that, all entries including old passwords will be removed.
-    > bwc.py bitwarden_export.json **-removeusedpw**
+
+    ``` python bwc.py bitwarden_export.json -removeusedpw ```
+
+    ![](\src\pic\removeusedpw.jpg)
+
+- ### Use cleaner and converter together
+    If you want to clean old used passwords and convert URIs, you can set flags together
+
+    ``` python bwc.py bitwarden_export.json [-domain | -subdomain] [-removeusedpw] ```
 
 ## Security
 To edit URIs or remove Password History, you'll need export your vault in unencrypted JSON file.

@@ -15,10 +15,6 @@ parser.add_argument("-removeusedpw", action="store_true", help="Remove previousl
 args = parser.parse_args()
 
 
-with open(args.file, "r", encoding="UTF-8") as bw:
-    json_bw = json.loads(str(bw.read()))
-
-
 def remove_password_history():
     try:
         item["passwordHistory"] = None
@@ -55,6 +51,9 @@ def fix_domain_links():
     except KeyError:
         print("No logins for this entry")
 
+
+with open(args.file, "r", encoding="UTF-8") as bw:
+    json_bw = json.loads(str(bw.read()))
 
 for item in json_bw["items"]:
     if args.removeusedpw:
