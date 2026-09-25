@@ -1,5 +1,6 @@
 import json
 import argparse
+import re
 import tldextract
 
 parser = argparse.ArgumentParser()
@@ -22,10 +23,21 @@ def remove_password_history():
         print("Looks like there's no password history for this entry")
 
 
+def is_web_uri(value):
+    """ Check if URL is WEB """
+    match = re.match(r"^([a-z][a-z0-9+.-]*)\\?:", value, re.IGNORECASE)
+    scheme = match.group(1).lower() if match else ""
+    return scheme in ("", "http", "https")
+
+
 def fix_domain_links():
     try:
         for uri in item["login"]["uris"]:
-            extracted = tldextract.extract(uri["uri"])
+            value = uri["uri"]
+            if not is_web_uri(value):
+                continue
+
+            extracted = tldextract.extract(value)
             # print(extracted)
             if args.domain:
                 if len(extracted.suffix) == 0:
