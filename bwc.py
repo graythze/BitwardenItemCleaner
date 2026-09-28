@@ -15,9 +15,20 @@ group.add_argument("-domain", action="store_true", help="Convert URIs to domains
 group.add_argument("-subdomain", action="store_true", help="Convert URIs with subdomain")
 parser.add_argument("-bypassip", action="store_true", help="Bypass entries with IP")
 parser.add_argument("-removeusedpw", action="store_true", help="Remove previously used passwords")
+parser.add_argument(
+    "--psl",
+    action="store_true",
+    help="Get the Public Suffix List from the network (default: use the bundled snapshot)",
+)
 
 
 args = parser.parse_args()
+
+# Offline mode by default
+if args.psl:
+    tld_extractor = tldextract.TLDExtract()
+else:
+    tld_extractor = tldextract.TLDExtract(suffix_list_urls=())
 
 
 def remove_password_history():
@@ -89,7 +100,7 @@ def fix_links():
             print(f"Found URI: {value}")
             scheme = protocol_type(value)
             url_t = url_type(value)
-            extracted = tldextract.extract(value)
+            extracted = tld_extractor(value)
 
             if args.domain:
                 if args.bypassip:
