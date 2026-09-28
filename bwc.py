@@ -63,10 +63,27 @@ def ip_get(value):
 
 
 def fix_links():
-    try:
-        for uri in item["login"]["uris"]:
-            value = uri["uri"]
+    login = item.get("login")
+    if not isinstance(login, dict):
+        print("[SKIPPED] Item has no valid login data")
+        return
 
+    uris = login.get("uris")
+    if not isinstance(uris, list):
+        print("[SKIPPED] Item has no valid URI list")
+        return
+
+    for uri in uris:
+        if not isinstance(uri, dict):
+            print("[SKIPPED] URI entry is not an object")
+            continue
+
+        value = uri.get("uri")
+        if not isinstance(value, str):
+            print("[SKIPPED] URI is missing or is not a string")
+            continue
+
+        try:
             if not scheme_type(value):
                 continue
             print(f"Found URI: {value}")
@@ -109,10 +126,10 @@ def fix_links():
                     if url_t == "webpage":
                         uri.update({"uri": f'{scheme}{extracted.subdomain}.{extracted.domain}.{extracted.suffix}/'})
                         print(f"[CHANGE] {value} -> {scheme}{extracted.subdomain}.{extracted.domain}.{extracted.suffix}/")
-    except KeyError as e:
-        traceback.print_exc()
-    finally:
-        print("\n")
+        except (TypeError, ValueError, AttributeError) as error:
+            print(f"[SKIPPED] Invalid URI {value!r}: {error}")
+
+    print("\n")
 
 
 with open(args.file, "r", encoding="UTF-8") as bw:
