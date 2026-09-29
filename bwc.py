@@ -58,19 +58,31 @@ def protocol_type(value):
         return ""
 
 
-def url_type(value):
-    """ Check URL type """
-    hostname = urlparse(value).hostname
+def normalize_uri(value, mode, bypass_ip):
+    """Return a normalized URI, or None when an IP should be bypassed."""
+    scheme = protocol_type(value)
+    parsed = urlparse(value)
+    hostname = parsed.hostname
 
     try:
         ipaddress.ip_address(hostname)
-        return "ip"
+        url_t = "ip"
     except ValueError:
-        return "webpage"
+        url_t = "webpage"
 
+    if url_t == "ip":
+        if bypass_ip:
+            return None
+        return f"{scheme}{hostname}/"
 
-def ip_get(value):
-    return urlparse(value).hostname
+    extracted = tld_extractor(value)
+    if mode == "domain":
+        host = extracted.top_domain_under_public_suffix
+    else:
+        host = ".".join(
+            part for part in (extracted.subdomain, extracted.domain, extracted.suffix) if part
+        )
+    return f"{scheme}{host}/"
 
 
 def fix_links():
@@ -98,45 +110,13 @@ def fix_links():
             if not scheme_type(value):
                 continue
             print(f"Found URI: {value}")
-            scheme = protocol_type(value)
-            url_t = url_type(value)
-            extracted = tld_extractor(value)
-
-            if args.domain:
-                if args.bypassip:
-                    if url_t != "ip":
-                        uri.update({"uri": f'{scheme}{extracted.top_domain_under_public_suffix}/'})
-                        print(f"[CHANGE] {value} -> {scheme}{extracted.top_domain_under_public_suffix}/")
-
-                    if url_t == "ip":
-                        print(f"[NOT CHANGED] {value} -> {value}")
-                else:
-                    if url_t == "ip":
-                        ipa = ip_get(value)
-                        uri.update({"uri": f'{scheme}{ipa}/'})
-                        print(f"[CHANGE] {value} -> {scheme}{ipa}/")
-
-                    if url_t == "webpage":
-                        uri.update({"uri": f'{scheme}{extracted.top_domain_under_public_suffix}/'})
-                        print(f"[CHANGE] {value} -> {scheme}{extracted.top_domain_under_public_suffix}/")
-
-            if args.subdomain:
-                if args.bypassip:
-                    if url_t != "ip":
-                        uri.update({"uri": f'{scheme}{extracted.subdomain}.{extracted.domain}.{extracted.suffix}/'})
-                        print(f"[CHANGE] {value} -> {scheme}{extracted.subdomain}.{extracted.domain}.{extracted.suffix}/")
-
-                    if url_t == "ip":
-                        print(f"[NOT CHANGED] {value} -> {value}")
-                else:
-                    if url_t == "ip":
-                        ipa = ip_get(value)
-                        uri.update({"uri": f'{scheme}{ipa}/'})
-                        print(f"[CHANGE] {value} -> {scheme}{ipa}/")
-
-                    if url_t == "webpage":
-                        uri.update({"uri": f'{scheme}{extracted.subdomain}.{extracted.domain}.{extracted.suffix}/'})
-                        print(f"[CHANGE] {value} -> {scheme}{extracted.subdomain}.{extracted.domain}.{extracted.suffix}/")
+            mode = "domain" if args.domain else "subdomain"
+            normalized = normalize_uri(value, mode, args.bypassip)
+            if normalized is None:
+                print(f"[NOT CHANGED] {value} -> {value}")
+            else:
+                uri.update({"uri": normalized})
+                print(f"[CHANGE] {value} -> {normalized}")
         except (TypeError, ValueError, AttributeError) as error:
             print(f"[SKIPPED] Invalid URI {value!r}: {error}")
 
