@@ -1,96 +1,98 @@
-import json
 import argparse
-import re
-import traceback
-from urllib.parse import urlparse
-import tldextract
 import ipaddress
-
-parser = argparse.ArgumentParser()
-
-parser.add_argument("file", help="Path to Bitwarden JSON file")
-
-group = parser.add_mutually_exclusive_group()
-group.add_argument("-domain", action="store_true", help="Convert URIs to domains only")
-group.add_argument("-subdomain", action="store_true", help="Convert URIs with subdomain")
-parser.add_argument("-bypassip", action="store_true", help="Bypass entries with IP")
-parser.add_argument("-removeusedpw", action="store_true", help="Remove previously used passwords")
-parser.add_argument(
-    "--psl",
-    action="store_true",
-    help="Get the Public Suffix List from the network (default: use the bundled snapshot)",
-)
+import json
+import re
+from urllib.parse import urlsplit
+import time
+import tldextract
 
 
-args = parser.parse_args()
-
-# Offline mode by default
-if args.psl:
-    tld_extractor = tldextract.TLDExtract()
-else:
-    tld_extractor = tldextract.TLDExtract(suffix_list_urls=())
+SCHEME_RE = re.compile(r"^([a-z][a-z0-9+.-]*):", re.IGNORECASE)
 
 
-def remove_password_history():
+def build_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file", help="Path to Bitwarden JSON file")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-domain", action="store_true", help="Convert URIs to domains only")
+    group.add_argument("-subdomain", action="store_true", help="Convert URIs with subdomain")
+    parser.add_argument("-bypassip", action="store_true", help="Bypass entries with IP")
+    parser.add_argument("-removeusedpw", action="store_true", help="Remove previously used passwords")
+    parser.add_argument("--psl", action="store_true", help="Get the Public Suffix List from the network")
+    return parser
+
+
+def create_tld_extractor(use_network):
+    """Create an extractor that stays offline unless the user opts in."""
+    return tldextract.TLDExtract() if use_network else tldextract.TLDExtract(suffix_list_urls=())
+
+
+def remove_password_history(item):
+    """Clear the password-history value on one vault item."""
+    item["passwordHistory"] = None
+
+
+def get_scheme(value):
+    match = SCHEME_RE.match(value)
+    return match.group(1).lower() if match else ""
+
+
+def is_web_uri(value):
+    """Return whether a URI has no scheme or an HTTP(S) scheme."""
+    return get_scheme(value) in ("", "http", "https")
+
+
+def split_web_uri(value):
+    """Return scheme and hostname, including for a URI without a scheme."""
+    scheme = get_scheme(value)
+    parsed = urlsplit(value if scheme else f"//{value}")
+    if not parsed.hostname:
+        raise ValueError("URI has no hostname")
+    return scheme, parsed.hostname
+
+
+def format_host(hostname):
+    """Wrap IPv6 hosts in brackets so they remain valid URI authorities."""
     try:
-        item["passwordHistory"] = None
-    except KeyError as e:
-        traceback.print_exc()
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        return hostname
+    return f"[{address.compressed}]" if address.version == 6 else address.compressed
 
 
-def scheme_type(value):
-    """ Check if URL is WEB """
-    match = re.match(r"^([a-z][a-z0-9+.-]*)\\?:", value, re.IGNORECASE)
-    scheme = match.group(1).lower() if match else ""
-    return scheme in ("", "http", "https")
-
-
-def protocol_type(value):
-    """ Check and preserve protocol type """
-    match = re.match(r"^([a-z][a-z0-9+.-]*)\\?:", value, re.IGNORECASE)
-    scheme = match.group(1).lower() if match else ""
-
-    if "https" in scheme:
-        return "https://"
-    elif "http" in scheme:
-        return "http://"
-    else:
-        return ""
-
-
-def normalize_uri(value, mode, bypass_ip):
+def normalize_uri(value, mode, bypass_ip, extractor):
     """Return a normalized URI, or None when an IP should be bypassed."""
-    scheme = protocol_type(value)
-    parsed = urlparse(value)
-    hostname = parsed.hostname
+    scheme, hostname = split_web_uri(value)
+    protocol = f"{scheme}://" if scheme else ""
 
     try:
         ipaddress.ip_address(hostname)
-        url_t = "ip"
     except ValueError:
-        url_t = "webpage"
+        is_ip = False
+    else:
+        is_ip = True
 
-    if url_t == "ip":
+    if is_ip:
         if bypass_ip:
             return None
-        return f"{scheme}{hostname}/"
+        return f"{protocol}{format_host(hostname)}/"
 
-    extracted = tld_extractor(value)
+    extracted = extractor(hostname)
     if mode == "domain":
-        host = extracted.top_domain_under_public_suffix
+        # Local and single-label hosts have no public suffix; preserve them.
+        host = extracted.top_domain_under_public_suffix or hostname
     else:
         host = ".".join(
             part for part in (extracted.subdomain, extracted.domain, extracted.suffix) if part
-        )
-    return f"{scheme}{host}/"
+        ) or hostname
+    return f"{protocol}{host}/"
 
 
-def fix_links():
+def fix_links(item, mode, bypass_ip, extractor):
     login = item.get("login")
     if not isinstance(login, dict):
         print("[SKIPPED] Item has no valid login data")
         return
-
     uris = login.get("uris")
     if not isinstance(uris, list):
         print("[SKIPPED] Item has no valid URI list")
@@ -100,41 +102,66 @@ def fix_links():
         if not isinstance(uri, dict):
             print("[SKIPPED] URI entry is not an object")
             continue
-
         value = uri.get("uri")
         if not isinstance(value, str):
             print("[SKIPPED] URI is missing or is not a string")
             continue
-
         try:
-            if not scheme_type(value):
+            if not is_web_uri(value):
                 continue
             print(f"Found URI: {value}")
-            mode = "domain" if args.domain else "subdomain"
-            normalized = normalize_uri(value, mode, args.bypassip)
+            normalized = normalize_uri(value, mode, bypass_ip, extractor)
             if normalized is None:
                 print(f"[NOT CHANGED] {value} -> {value}")
             else:
-                uri.update({"uri": normalized})
+                uri["uri"] = normalized
                 print(f"[CHANGE] {value} -> {normalized}")
-        except (TypeError, ValueError, AttributeError) as error:
+        except ValueError as error:
             print(f"[SKIPPED] Invalid URI {value!r}: {error}")
 
-    print("\n")
+
+def load_export(path):
+    try:
+        with open(path, "r", encoding="utf-8") as export_file:
+            export = json.load(export_file)
+    except OSError as error:
+        raise ValueError(f"Cannot read input file: {error}") from error
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Input file is not valid JSON: {error}") from error
+    if not isinstance(export, dict):
+        raise ValueError("Bitwarden export must be a JSON object")
+    if not isinstance(export.get("items"), list):
+        raise ValueError("Bitwarden export must contain an 'items' array")
+    return export
 
 
-with open(args.file, "r", encoding="UTF-8") as bw:
-    json_bw = json.loads(str(bw.read()))
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    try:
+        json_bw = load_export(args.file)
+    except ValueError as error:
+        parser.error(str(error))
 
-for item in json_bw["items"]:
-    if item["type"] == 1:
-        print(f"Processing item with ID: {item['id']}")
+    extractor = create_tld_extractor(args.psl)
+    mode = "domain" if args.domain else "subdomain"
+    for index, item in enumerate(json_bw["items"]):
+        if not isinstance(item, dict):
+            print(f"[SKIPPED] Item at index {index} is not an object")
+            continue
+        item_id = item.get("id", f"index {index}")
+        if item.get("type") != 1:
+            print(f"Item {item_id} is not a password-type item\n")
+            continue
+        print(f"\nProcessing item with ID: {item_id}")
         if args.removeusedpw:
-            remove_password_history()
+            remove_password_history(item)
         if args.domain or args.subdomain:
-            fix_links()
-    else:
-        print(f"Item {item['id']} is not a password-type item\n")
+            fix_links(item, mode, args.bypassip, extractor)
 
-with open("bw_cleaned.json", "w", encoding="UTF-8") as bw:
-    bw.write(json.dumps(json_bw, indent=2, ensure_ascii=False))
+    with open(f"bw_cleaned{int(time.time())}.json", "w", encoding="utf-8") as output_file:
+        json.dump(json_bw, output_file, indent=2, ensure_ascii=False)
+
+
+if __name__ == "__main__":
+    main()
