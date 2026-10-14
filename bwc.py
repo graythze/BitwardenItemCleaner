@@ -11,14 +11,28 @@ SCHEME_RE = re.compile(r"^([a-z][a-z0-9+.-]*):", re.IGNORECASE)
 
 
 def build_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("file", help="Path to Bitwarden JSON file")
+    parser = argparse.ArgumentParser(
+        description="Clean and normalize URIs in a Bitwarden JSON vault export.",
+        epilog=(
+            "Examples:\n"
+            "  python bwc.py vault.json --domain\n"
+            "  python bwc.py vault.json --subdomain --bypassip\n"
+            "  python bwc.py vault.json --rmusedpws\n"
+            "  python bwc.py vault.json --domain --getpsl"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    parser.add_argument("file", help="Path to Bitwarden JSON vault file")
+
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("-domain", action="store_true", help="Convert URIs to domains only")
-    group.add_argument("-subdomain", action="store_true", help="Convert URIs with subdomain")
-    parser.add_argument("-bypassip", action="store_true", help="Bypass entries with IP")
-    parser.add_argument("-removeusedpw", action="store_true", help="Remove previously used passwords")
-    parser.add_argument("--psl", action="store_true", help="Get the Public Suffix List from the network")
+    group.add_argument("-dom", "--domain", action="store_true", help="Convert URIs to domains only")
+    group.add_argument("-subd", "--subdomain", action="store_true", help="Convert URIs with subdomain")
+
+    parser.add_argument("-byp", "--bypassip", action="store_true", help="Bypass entries with IP")
+    parser.add_argument("-rmpw", "--rmusedpws", action="store_true", help="Remove previously used passwords")
+    parser.add_argument("-psl", "--getpsl", action="store_true", help="Get the Public Suffix List from the network")
+
     return parser
 
 
@@ -143,7 +157,7 @@ def main():
     except ValueError as error:
         parser.error(str(error))
 
-    extractor = create_tld_extractor(args.psl)
+    extractor = create_tld_extractor(args.getpsl)
     mode = "domain" if args.domain else "subdomain"
     for index, item in enumerate(json_bw["items"]):
         if not isinstance(item, dict):
@@ -154,7 +168,7 @@ def main():
             print(f"Item {item_id} is not a password-type item\n")
             continue
         print(f"\nProcessing item with ID: {item_id}")
-        if args.removeusedpw:
+        if args.rmusedpws:
             remove_password_history(item)
         if args.domain or args.subdomain:
             fix_links(item, mode, args.bypassip, extractor)
