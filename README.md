@@ -98,7 +98,7 @@ python bwc.py vault.json --domain --getpsl
 
 Если не указать `--domain` или `--subdomain`, URI не изменяются. При этом `--rmusedpws` можно использовать отдельно.
 
-После выполнения скрипт создает файл с именем вида `bw_cleaned<timestamp>.json` в текущей директории. Обрабатываются только элементы Bitwarden с `type == 1`; некорректные элементы и URI пропускаются с сообщением в консоли.
+После выполнения скрипт создает файл с именем вида `bw_cleaned<timestamp>.json` в текущей директории. В конце работы в консоли также выводится сравнение исходного и нового файлов в стиле `git diff`, чтобы было видно внесенные изменения. Обрабатываются только элементы Bitwarden с `type == 1`; некорректные элементы и URI пропускаются с сообщением в консоли.
 
 ## Безопасность
 
@@ -201,7 +201,7 @@ python bwc.py vault.json --rmusedpws
 python bwc.py vault.json --domain --getpsl
 ```
 
-The script creates an output file named `bw_cleaned<timestamp>.json` in the current directory. Only Bitwarden items with `type == 1` are processed. Invalid items and URI values are skipped with a console message.
+The script creates an output file named `bw_cleaned<timestamp>.json` in the current directory. At the end, the console also shows a `git diff`-style comparison of the original and new files so you can review the changes. Only Bitwarden items with `type == 1` are processed. Invalid items and URI values are skipped with a console message.
 
 ## Security
 

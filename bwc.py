@@ -1,10 +1,13 @@
 import argparse
+import difflib
 import ipaddress
 import json
 import re
 from urllib.parse import urlsplit
 import time
 import tldextract
+from rich.console import Console
+from rich.syntax import Syntax
 
 
 SCHEME_RE = re.compile(r"^([a-z][a-z0-9+.-]*):", re.IGNORECASE)
@@ -157,6 +160,9 @@ def main():
     except ValueError as error:
         parser.error(str(error))
 
+    with open(args.file, "r", encoding="utf-8") as source_file:
+        old_content = source_file.readlines()
+
     extractor = create_tld_extractor(args.getpsl)
     mode = "domain" if args.domain else "subdomain"
     for index, item in enumerate(json_bw["items"]):
@@ -173,8 +179,18 @@ def main():
         if args.domain or args.subdomain:
             fix_links(item, mode, args.bypassip, extractor)
 
-    with open(f"bw_cleaned{int(time.time())}.json", "w", encoding="utf-8") as output_file:
+    output_path = f"bw_cleaned{int(time.time())}.json"
+    with open(output_path, "w", encoding="utf-8") as output_file:
         json.dump(json_bw, output_file, indent=2, ensure_ascii=False)
+
+    new_content = json.dumps(json_bw, indent=2, ensure_ascii=False).splitlines(keepends=True)
+    diff = difflib.unified_diff(
+        old_content,
+        new_content,
+        fromfile=args.file,
+        tofile=output_path,
+    )
+    Console().print(Syntax("".join(diff), "diff", line_numbers=False))
 
 
 if __name__ == "__main__":
